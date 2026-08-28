@@ -14,9 +14,16 @@ const fallback: ItineraryData = {
   estCost: 14650,
   daysCount: 3,
   nightsCount: 2,
-  travelOptions: [
-    { mode: "Flight", from: "Delhi", duration: "1h 5m", estCost: 3200, notes: "Book 2-3 weeks ahead for best fares" },
-    { mode: "Train", from: "Delhi", duration: "4h 30m", estCost: 800 },
+  legTravelOptions: [
+    {
+      from: "Delhi",
+      to: "Jaipur",
+      distanceKm: 280,
+      options: [
+        { mode: "Flight", from: "Delhi", duration: "1h 5m", estCost: 3200, notes: "Book 2-3 weeks ahead for best fares" },
+        { mode: "Train", from: "Delhi", duration: "4h 30m", estCost: 800 },
+      ],
+    },
   ],
   localTransportEstCost: 1200,
   days: [
@@ -24,6 +31,8 @@ const fallback: ItineraryData = {
     { day: 2, title: "Walled City & Bazaars", detail: "Hawa Mahal, Johari Bazaar, street food trail" },
     { day: 3, title: "Sunset & Craft Villages", detail: "Nahargarh sunset point, block-print villages" },
   ],
+  stops: ["Delhi", "Jaipur"],
+  totalDistanceKm: 280,
 };
 
 const currency = (n: number) =>
@@ -40,6 +49,8 @@ const modeIcon = (mode: string) => {
 export default function ItineraryCard({ data = fallback }: { data?: ItineraryData }) {
   const surplus = data.targetBudget - data.estCost;
   const surplusLabel = `${surplus >= 0 ? "+" : "-"}${currency(Math.abs(surplus))}`;
+  const hasRoute = !!data.stops && data.stops.length > 1;
+  const hasTravelOptions = data.legTravelOptions && data.legTravelOptions.length > 0;
 
   return (
     <div
@@ -81,64 +92,111 @@ export default function ItineraryCard({ data = fallback }: { data?: ItineraryDat
         </div>
       </div>
 
-      {/* perforation divider */}
-      <div className="relative mt-6 mx-9">
-        <div className="border-t-2 border-dashed border-white/25" />
-        <div className="absolute -top-[11px] -left-[46px] h-[22px] w-[22px] rounded-full bg-[#fffaf3]" />
-        <div className="absolute -top-[11px] -right-[46px] h-[22px] w-[22px] rounded-full bg-[#fffaf3]" />
-      </div>
-
-      {/* how to reach */}
-      {data.travelOptions && data.travelOptions.length > 0 && (
-        <div className="relative z-10 px-9 mt-6">
-          <div className={`${mono.className} text-[10.5px] uppercase tracking-widest text-white/55 mb-3`}>
-            How to Reach
+      {/* route / stops */}
+      {hasRoute && (
+        <>
+          <Divider />
+          <div className="relative z-10 px-9 mt-6">
+            <div className={`${mono.className} text-[10.5px] uppercase tracking-widest text-white/55 mb-3`}>
+              Route
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 text-[13.5px]">
+              {data.stops!.map((s, i) => (
+                <span key={i} className="flex items-center gap-1.5">
+                  <span
+                    className="font-semibold"
+                    style={{
+                      color: i === 0 ? "#c9d2ff" : i === data.stops!.length - 1 ? "#ffb238" : "white",
+                    }}
+                  >
+                    {s}
+                  </span>
+                  {i < data.stops!.length - 1 && <span className="text-white/40">→</span>}
+                </span>
+              ))}
+            </div>
+            {typeof data.totalDistanceKm === "number" && (
+              <div className={`${mono.className} mt-2 text-[12px] text-white/50`}>
+                Total distance: {data.totalDistanceKm.toLocaleString("en-IN")} km
+              </div>
+            )}
           </div>
-          <div className="flex flex-col gap-2.5">
-            {data.travelOptions.map((t, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.04] px-3.5 py-2.5"
-              >
-                <div className="flex items-center gap-2.5">
-                  <span className="text-base leading-none">{modeIcon(t.mode)}</span>
-                  <div>
-                    <div className="text-[13.5px] font-semibold text-white">
-                      {t.mode} from {t.from}
+        </>
+      )}
+
+      {/* how to reach — grouped per leg */}
+      {hasTravelOptions && (
+        <>
+          <Divider />
+          <div className="relative z-10 px-9 mt-6">
+            <div className={`${mono.className} text-[10.5px] uppercase tracking-widest text-white/55 mb-3`}>
+              How to Reach
+            </div>
+
+            <div className="flex flex-col gap-5">
+              {data.legTravelOptions.map((leg, legIdx) => (
+                <div key={`${leg.from}-${leg.to}-${legIdx}`}>
+                  <div className="flex items-baseline justify-between mb-2">
+                    <div className="text-[13px] font-semibold text-white/80">
+                      {leg.from} <span className="text-white/40">→</span> {leg.to}
                     </div>
-                    {(t.duration || t.notes) && (
-                      <div className="text-[11.5px] text-white/50">
-                        {t.duration}
-                        {t.duration && t.notes ? " · " : ""}
-                        {t.notes}
+                    {typeof leg.distanceKm === "number" && (
+                      <div className={`${mono.className} text-[10.5px] text-white/40`}>
+                        {leg.distanceKm.toLocaleString("en-IN")} km
                       </div>
                     )}
                   </div>
-                </div>
-                <div className={`${mono.className} text-[13px] font-bold text-[#ffb238] shrink-0 pl-3`}>
-                  {currency(t.estCost)}
-                </div>
-              </div>
-            ))}
-          </div>
 
-          {typeof data.localTransportEstCost === "number" && (
-            <div className="flex items-center justify-between mt-3 px-1">
-              <span className="text-[12.5px] text-white/50">Local transport (full trip, est.)</span>
-              <span className={`${mono.className} text-[12.5px] font-semibold text-white/70`}>
-                {currency(data.localTransportEstCost)}
-              </span>
+                  {leg.options.length > 0 ? (
+                    <div className="flex flex-col gap-2.5">
+                      {leg.options.map((t, i) => (
+                        <div
+                          key={i}
+                          className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.04] px-3.5 py-2.5"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <span className="text-base leading-none">{modeIcon(t.mode)}</span>
+                            <div>
+                              <div className="text-[13.5px] font-semibold text-white">
+                                {t.mode} from {t.from}
+                              </div>
+                              {(t.duration || t.notes) && (
+                                <div className="text-[11.5px] text-white/50">
+                                  {t.duration}
+                                  {t.duration && t.notes ? " · " : ""}
+                                  {t.notes}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className={`${mono.className} text-[13px] font-bold text-[#ffb238] shrink-0 pl-3`}>
+                            {currency(t.estCost)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-white/15 px-3.5 py-2.5 text-[12.5px] text-white/40">
+                      No travel options available for this leg.
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
-          )}
-        </div>
+
+            {typeof data.localTransportEstCost === "number" && (
+              <div className="flex items-center justify-between mt-4 px-1">
+                <span className="text-[12.5px] text-white/50">Local transport (full trip, est.)</span>
+                <span className={`${mono.className} text-[12.5px] font-semibold text-white/70`}>
+                  {currency(data.localTransportEstCost)}
+                </span>
+              </div>
+            )}
+          </div>
+        </>
       )}
 
-      {/* perforation divider */}
-      <div className="relative mt-6 mx-9">
-        <div className="border-t-2 border-dashed border-white/25" />
-        <div className="absolute -top-[11px] -left-[46px] h-[22px] w-[22px] rounded-full bg-[#fffaf3]" />
-        <div className="absolute -top-[11px] -right-[46px] h-[22px] w-[22px] rounded-full bg-[#fffaf3]" />
-      </div>
+      <Divider />
 
       {/* day list — length driven entirely by data, works for any trip length */}
       <div className="relative z-10 px-9 mt-1">
@@ -174,6 +232,16 @@ export default function ItineraryCard({ data = fallback }: { data?: ItineraryDat
           SFR-{data.code}-2026-014
         </div>
       </div>
+    </div>
+  );
+}
+
+function Divider() {
+  return (
+    <div className="relative mt-6 mx-9">
+      <div className="border-t-2 border-dashed border-white/25" />
+      <div className="absolute -top-[11px] -left-[46px] h-[22px] w-[22px] rounded-full bg-[#fffaf3]" />
+      <div className="absolute -top-[11px] -right-[46px] h-[22px] w-[22px] rounded-full bg-[#fffaf3]" />
     </div>
   );
 }

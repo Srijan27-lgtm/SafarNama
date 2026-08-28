@@ -9,8 +9,8 @@ const manrope = Manrope({ subsets: ["latin"], weight: ["400", "500", "600", "700
 const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["500", "700"] });
 
 export interface PlannerFormValues {
-  origin: string;
-  destination: string;
+  /** Ordered list of city names. First = origin, last = destination, any in between = waypoints. */
+  stops: string[];
   duration: string;
   style: string;
   budget: number;
@@ -19,29 +19,60 @@ export interface PlannerFormValues {
 const durations = ["3 Days", "5 Days", "7 Days", "10 Days", "14 Days"];
 const styles = ["Backpacker / Solo", "Comfort / Couple", "Family / Group", "Luxury"];
 
+const MAX_STOPS = 5;
+
 export default function TripConfig({
   onGenerate,
-  selectedDestination,
-  onDestinationChange,
+  stops: externalStops,
+  onStopsChange,
 }: {
   onGenerate?: (values: PlannerFormValues) => void;
-  selectedDestination?: string;
-  onDestinationChange?: (cityName: string) => void;
+  /** Stops controlled externally (e.g. by map clicks). */
+  stops?: string[];
+  onStopsChange?: (stops: string[]) => void;
 }) {
-  const [origin, setOrigin] = useState(cities[0]?.name ?? "");
-  const [destination, setDestination] = useState(
-    selectedDestination ?? cities[1]?.name ?? cities[0]?.name ?? ""
+  const [internalStops, setInternalStops] = useState<string[]>(
+    externalStops && externalStops.length >= 2
+      ? externalStops
+      : [cities[0]?.name ?? "", cities[1]?.name ?? cities[0]?.name ?? ""]
   );
   const [duration, setDuration] = useState(durations[0]);
   const [style, setStyle] = useState(styles[0]);
   const [budget, setBudget] = useState(15000);
 
-  // Keep the dropdown in sync when the map selection changes externally.
+  // Stay in sync when stops are set externally (e.g. via map clicks).
   useEffect(() => {
-    if (selectedDestination && selectedDestination !== destination) {
-      setDestination(selectedDestination);
+    if (externalStops && externalStops.length >= 2) {
+      setInternalStops(externalStops);
     }
-  }, [selectedDestination]);
+  }, [externalStops]);
+
+  const stops = internalStops;
+
+  const updateStops = (next: string[]) => {
+    setInternalStops(next);
+    onStopsChange?.(next);
+  };
+
+  const setStopAt = (index: number, value: string) => {
+    const next = [...stops];
+    next[index] = value;
+    updateStops(next);
+  };
+
+  const addStop = () => {
+    if (stops.length >= MAX_STOPS) return;
+    // Insert a new waypoint just before the final (destination) stop.
+    const fallbackCity = cities.find((c) => !stops.includes(c.name))?.name ?? cities[0]?.name ?? "";
+    const next = [...stops.slice(0, -1), fallbackCity, stops[stops.length - 1]];
+    updateStops(next);
+  };
+
+  const removeStop = (index: number) => {
+    if (stops.length <= 2) return; // always keep at least origin + destination
+    const next = stops.filter((_, i) => i !== index);
+    updateStops(next);
+  };
 
   const min = 5000;
   const max = 500000;
@@ -49,14 +80,15 @@ export default function TripConfig({
 
   const currency = (n: number) => `₹${n.toLocaleString("en-IN")}`;
 
-  const handleDestinationChange = (value: string) => {
-    setDestination(value);
-    onDestinationChange?.(value);
-  };
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onGenerate?.({ origin, destination, duration, style, budget });
+    onGenerate?.({ stops, duration, style, budget });
+  };
+
+  const stopLabel = (index: number) => {
+    if (index === 0) return "Origin (From)";
+    if (index === stops.length - 1) return "Destination (To)";
+    return `Stop ${index}`;
   };
 
   return (
@@ -76,43 +108,67 @@ export default function TripConfig({
         Trip Configuration
       </h3>
       <p className="mt-1.5 mb-7 text-sm text-black/55">
-        Works for any city in India — just pick one below
+        Add multiple stops to build a multi-city route — or just pick two.
       </p>
 
       <div className="mb-6">
-        <label htmlFor="origin" className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#1c2a6e]">
-          Origin City (From)
-        </label>
-        <select
-          id="origin"
-          value={origin}
-          onChange={(e) => setOrigin(e.target.value)}
-          className="w-full appearance-none rounded-[10px] border-[1.5px] border-black/10 bg-[#fffaf3] px-4 py-3 text-[15px] text-[#12142b] focus:border-[#3452e5] focus:bg-white focus:outline-none"
-        >
-          {cities.map((city) => (
-            <option key={city.code} value={city.name}>
-              {city.name}, {city.state}
-            </option>
-          ))}
-        </select>
-      </div>
+        <div className="mb-2 flex items-center justify-between">
+          <label className="block text-xs font-bold uppercase tracking-wide text-[#1c2a6e]">
+            Route Stops
+          </label>
+          {stops.length < MAX_STOPS && (
+            <button
+              type="button"
+              onClick={addStop}
+              className="text-xs font-bold text-[#3452e5] hover:underline"
+            >
+              + Add Stop
+            </button>
+          )}
+        </div>
 
-      <div className="mb-6">
-        <label htmlFor="destination" className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#1c2a6e]">
-          Destination City
-        </label>
-        <select
-          id="destination"
-          value={destination}
-          onChange={(e) => handleDestinationChange(e.target.value)}
-          className="w-full appearance-none rounded-[10px] border-[1.5px] border-black/10 bg-[#fffaf3] px-4 py-3 text-[15px] text-[#12142b] focus:border-[#3452e5] focus:bg-white focus:outline-none"
-        >
-          {cities.map((city) => (
-            <option key={city.code} value={city.name}>
-              {city.name}, {city.state}
-            </option>
+        <div className="flex flex-col gap-3">
+          {stops.map((stop, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <div className="flex flex-col items-center pt-3">
+                <span
+                  className={`${mono.className} flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white`}
+                  style={{ background: i === 0 ? "#1c2a6e" : i === stops.length - 1 ? "#ff7a21" : "#3452e5" }}
+                >
+                  {i + 1}
+                </span>
+              </div>
+              <div className="flex-1">
+                <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-[#1c2a6e]/70">
+                  {stopLabel(i)}
+                </label>
+                <select
+                  value={stop}
+                  onChange={(e) => setStopAt(i, e.target.value)}
+                  className="w-full appearance-none rounded-[10px] border-[1.5px] border-black/10 bg-[#fffaf3] px-4 py-2.5 text-[14px] text-[#12142b] focus:border-[#3452e5] focus:bg-white focus:outline-none"
+                >
+                  {cities.map((city) => (
+                    <option key={city.code} value={city.name}>
+                      {city.name}, {city.state}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {stops.length > 2 && (
+                <button
+                  type="button"
+                  onClick={() => removeStop(i)}
+                  aria-label={`Remove ${stopLabel(i)}`}
+                  className="mt-6 shrink-0 rounded-full p-1.5 text-black/30 hover:bg-black/5 hover:text-red-500"
+                >
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                  </svg>
+                </button>
+              )}
+            </div>
           ))}
-        </select>
+        </div>
       </div>
 
       <div className="mb-6">

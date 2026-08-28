@@ -4,21 +4,15 @@ import { useState } from "react";
 import { ComposableMap, Geographies, Geography, Marker, Line } from "react-simple-maps";
 import { Fraunces, Manrope, JetBrains_Mono } from "next/font/google";
 import { majorCities } from "@/data/majorCities";
+import { computeRouteLegs } from "@/lib/geo";
 
 const fraunces = Fraunces({ subsets: ["latin"], weight: ["700"] });
 const manrope = Manrope({ subsets: ["latin"], weight: ["500", "600"] });
 const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["600", "700"] });
 
-// Up-to-date India GeoJSON (post-2019 reorganisation), with J&K and Ladakh
-// as separate union territories. Source: udit-001/india-maps-data, pinned
-// to a specific commit so the file won't change unexpectedly.
 const INDIA_GEO_URL =
   "https://cdn.jsdelivr.net/gh/udit-001/india-maps-data@2884453/geojson/india.geojson";
 
-// A muted, warm palette that stays in the same family as the rest of the
-// site (creams, blues, oranges, terracottas) instead of a clashing
-// rainbow. Cycled deterministically per state so colors stay stable
-// across re-renders and reloads.
 const STATE_PALETTE = [
   "#e7e2d6", "#f0d9c3", "#d9e3d6", "#e3d4e8", "#f3e0c9",
   "#cfe0e8", "#f0cfc9", "#dbe0c2", "#e8d9ee", "#c9dde0",
@@ -33,43 +27,68 @@ function colorForState(name: string | undefined): string {
     hash = (hash << 5) - hash + name.charCodeAt(i);
     hash |= 0;
   }
-  const index = Math.abs(hash) % STATE_PALETTE.length;
-  return STATE_PALETTE[index];
+  return STATE_PALETTE[Math.abs(hash) % STATE_PALETTE.length];
 }
 
-// The udit-001 geojson stores the state name under one of these keys
-// depending on the feature — check them in order so we reliably pick it
-// up regardless of which property set a given feature uses.
 function getStateName(properties: Record<string, any> | undefined): string | undefined {
   if (!properties) return undefined;
-  return (
-    properties.st_nm ??
-    properties.STATE ??
-    properties.NAME_1 ??
-    properties.name ??
-    undefined
-  );
+  return properties.st_nm ?? properties.STATE ?? properties.NAME_1 ?? properties.name ?? undefined;
 }
 
+type ClickMode = "origin" | "waypoint" | "destination";
+
 export default function IndiaMap({
-  onSelectDestination,
-  selected,
-  origin,
+  stops = [],
+  onStopsChange,
 }: {
-  onSelectDestination?: (cityName: string) => void;
-  selected?: string;
-  /** Name of the origin city, if one has been picked (e.g. via the trip form). */
-  origin?: string;
+  /** Ordered list of city names: first = origin, last = destination. */
+  stops?: string[];
+  onStopsChange?: (stops: string[]) => void;
 }) {
   const [hovered, setHovered] = useState<string | null>(null);
+  const [clickMode, setClickMode] = useState<ClickMode>("origin");
 
-  const originCity = origin ? majorCities.find((c) => c.name === origin) : undefined;
-  const destinationCity = selected ? majorCities.find((c) => c.name === selected) : undefined;
-  const showRoute = !!(originCity && destinationCity && originCity.name !== destinationCity.name);
+  const stopCities = stops
+    .map((name) => majorCities.find((c) => c.name === name))
+    .filter((c): c is (typeof majorCities)[number] => !!c);
+
+  const { legs, totalKm } =
+    stopCities.length >= 2 ? computeRouteLegs(stopCities as any) : { legs: [], totalKm: 0 };
+
+  const handleCityClick = (cityName: string) => {
+    if (!onStopsChange) return;
+
+    if (clickMode === "origin") {
+      const next = stops.length === 0 ? [cityName, cityName] : [cityName, ...stops.slice(1)];
+      onStopsChange(next);
+      setClickMode("destination");
+    } else if (clickMode === "destination") {
+      const next =
+        stops.length === 0
+          ? [cityName, cityName]
+          : [...stops.slice(0, -1), cityName];
+      onStopsChange(next);
+    } else {
+      // waypoint: insert before the final (destination) stop
+      if (stops.length < 2) return;
+      const next = [...stops.slice(0, -1), cityName, stops[stops.length - 1]];
+      onStopsChange(next);
+    }
+  };
+
+  const roleForCity = (cityName: string): "origin" | "waypoint" | "destination" | null => {
+    if (stops.length === 0) return null;
+    if (stops[0] === cityName) return "origin";
+    if (stops[stops.length - 1] === cityName) return "destination";
+    if (stops.includes(cityName)) return "waypoint";
+    return null;
+  };
+
+  const roleColor = { origin: "#1c2a6e", waypoint: "#3452e5", destination: "#ff7a21" } as const;
 
   return (
     <section className="px-6 md:px-12 py-20 max-w-5xl mx-auto">
-      <div className="text-center mb-10">
+      <div className="text-center mb-8">
         <div className={`${mono.className} text-xs font-bold uppercase tracking-widest text-[#3452e5]`}>
           Explore by Map
         </div>
@@ -77,8 +96,26 @@ export default function IndiaMap({
           Every state, one map
         </h2>
         <p className={`${manrope.className} mt-3 text-sm text-black/55 max-w-md mx-auto`}>
-          Click any city to load it into your trip — your pick glows on the map.
+          Pick a mode below, then click cities to build your route.
         </p>
+      </div>
+
+      {/* Click-mode toggle */}
+      <div className="flex justify-center gap-2 mb-6">
+        {(["origin", "waypoint", "destination"] as ClickMode[]).map((mode) => (
+          <button
+            key={mode}
+            type="button"
+            onClick={() => setClickMode(mode)}
+            className={`${mono.className} rounded-full px-4 py-2 text-[11px] font-bold uppercase tracking-wide transition-colors`}
+            style={{
+              background: clickMode === mode ? roleColor[mode] : "#f2ede0",
+              color: clickMode === mode ? "#fffaf3" : "#12142b99",
+            }}
+          >
+            {mode === "origin" ? "Set Origin" : mode === "destination" ? "Set Destination" : "+ Add Stop"}
+          </button>
+        ))}
       </div>
 
       <div className="rounded-[20px] border border-black/10 bg-white p-4 shadow-[0_20px_50px_-25px_rgba(18,20,43,0.18)]">
@@ -92,8 +129,7 @@ export default function IndiaMap({
           <Geographies geography={INDIA_GEO_URL}>
             {({ geographies }: { geographies: any[] }) =>
               geographies.map((geo: any) => {
-                const stateName = getStateName(geo.properties);
-                const fill = colorForState(stateName);
+                const fill = colorForState(getStateName(geo.properties));
                 return (
                   <Geography
                     key={geo.rsmKey}
@@ -109,43 +145,61 @@ export default function IndiaMap({
             }
           </Geographies>
 
-          {/* Connecting route line between origin and destination */}
-          {showRoute && (
-            <Line
-              from={[originCity!.lng, originCity!.lat]}
-              to={[destinationCity!.lng, destinationCity!.lat]}
-              stroke="#ff7a21"
-              strokeWidth={1.6}
-              strokeLinecap="round"
-              strokeDasharray="5 4"
-              className="route-line"
-            />
-          )}
+          {/* Route lines with distance labels, one per leg */}
+          {legs.map((leg, i) => {
+            const from = stopCities[i];
+            const to = stopCities[i + 1];
+            if (!from || !to) return null;
+            const midLng = (from.lng + to.lng) / 2;
+            const midLat = (from.lat + to.lat) / 2;
+            return (
+              <g key={`${leg.from}-${leg.to}-${i}`}>
+                <Line
+                  from={[from.lng, from.lat]}
+                  to={[to.lng, to.lat]}
+                  stroke="#ff7a21"
+                  strokeWidth={1.6}
+                  strokeLinecap="round"
+                  strokeDasharray="5 4"
+                  className="route-line"
+                />
+                <Marker coordinates={[midLng, midLat]}>
+                  <text
+                    textAnchor="middle"
+                    className={mono.className}
+                    style={{
+                      fontSize: 8,
+                      fontWeight: 700,
+                      fill: "#ff7a21",
+                      paintOrder: "stroke",
+                      stroke: "#fffaf3",
+                      strokeWidth: 3,
+                    }}
+                  >
+                    {leg.distanceKm} km
+                  </text>
+                </Marker>
+              </g>
+            );
+          })}
 
           {majorCities.map((city) => {
-            const isDestination = selected === city.name;
-            const isOrigin = origin === city.name && !isDestination;
+            const role = roleForCity(city.name);
             const isHovered = hovered === city.name;
-            const isActive = isDestination || isOrigin;
-
-            const dotColor = isDestination ? "#ff7a21" : isOrigin ? "#1c2a6e" : "#3452e5";
+            const isActive = !!role;
+            const dotColor = role ? roleColor[role] : "#3452e5";
 
             return (
               <Marker
                 key={city.code}
                 coordinates={[city.lng, city.lat]}
-                onClick={() => onSelectDestination?.(city.name)}
+                onClick={() => handleCityClick(city.name)}
                 onMouseEnter={() => setHovered(city.name)}
                 onMouseLeave={() => setHovered(null)}
                 style={{ default: { cursor: "pointer" }, hover: { cursor: "pointer" }, pressed: { cursor: "pointer" } }}
               >
                 {isActive && <circle r={5} fill={dotColor} opacity={0.45} className="map-pulse" />}
-                <circle
-                  r={isActive ? 5 : 3}
-                  fill={dotColor}
-                  stroke="#fffaf3"
-                  strokeWidth={1.1}
-                />
+                <circle r={isActive ? 5 : 3} fill={dotColor} stroke="#fffaf3" strokeWidth={1.1} />
                 {(isHovered || isActive) && (
                   <text
                     textAnchor="middle"
@@ -154,13 +208,13 @@ export default function IndiaMap({
                     style={{
                       fontSize: 9,
                       fontWeight: 700,
-                      fill: isDestination ? "#ff7a21" : isOrigin ? "#1c2a6e" : "#12142b",
+                      fill: dotColor,
                       paintOrder: "stroke",
                       stroke: "#fffaf3",
                       strokeWidth: 3,
                     }}
                   >
-                    {isOrigin ? `From: ${city.name}` : isDestination ? `To: ${city.name}` : city.name}
+                    {role === "origin" ? `From: ${city.name}` : role === "destination" ? `To: ${city.name}` : role === "waypoint" ? `Stop: ${city.name}` : city.name}
                   </text>
                 )}
               </Marker>
@@ -169,12 +223,19 @@ export default function IndiaMap({
         </ComposableMap>
       </div>
 
-      {showRoute && (
-        <p className={`${manrope.className} mt-4 text-center text-sm text-black/55`}>
-          <span className="font-semibold text-[#1c2a6e]">{originCity!.name}</span>
-          {" → "}
-          <span className="font-semibold text-[#ff7a21]">{destinationCity!.name}</span>
-        </p>
+      {legs.length > 0 && (
+        <div className={`${manrope.className} mt-4 text-center text-sm text-black/55`}>
+          <div className="flex flex-wrap justify-center gap-x-1.5">
+            {stops.map((s, i) => (
+              <span key={i} className="font-semibold" style={{ color: i === 0 ? "#1c2a6e" : i === stops.length - 1 ? "#ff7a21" : "#3452e5" }}>
+                {s}{i < stops.length - 1 ? " →" : ""}
+              </span>
+            ))}
+          </div>
+          <div className={`${mono.className} mt-1 text-xs text-black/45`}>
+            Total route distance: {totalKm.toLocaleString("en-IN")} km
+          </div>
+        </div>
       )}
 
       <style jsx>{`
