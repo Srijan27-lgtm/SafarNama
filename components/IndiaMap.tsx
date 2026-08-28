@@ -15,6 +15,42 @@ const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["600", "700"] });
 const INDIA_GEO_URL =
   "https://cdn.jsdelivr.net/gh/udit-001/india-maps-data@2884453/geojson/india.geojson";
 
+// A muted, warm palette that stays in the same family as the rest of the
+// site (creams, blues, oranges, terracottas) instead of a clashing
+// rainbow. Cycled deterministically per state so colors stay stable
+// across re-renders and reloads.
+const STATE_PALETTE = [
+  "#e7e2d6", "#f0d9c3", "#d9e3d6", "#e3d4e8", "#f3e0c9",
+  "#cfe0e8", "#f0cfc9", "#dbe0c2", "#e8d9ee", "#c9dde0",
+  "#f2e2b8", "#d6d9ee", "#e2cfc0", "#cee8d9", "#ecd6df",
+  "#d0e0cf", "#f0e6c8", "#d8d0e8", "#e0e8d0", "#f0d0d8",
+];
+
+function colorForState(name: string | undefined): string {
+  if (!name) return STATE_PALETTE[0];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash << 5) - hash + name.charCodeAt(i);
+    hash |= 0;
+  }
+  const index = Math.abs(hash) % STATE_PALETTE.length;
+  return STATE_PALETTE[index];
+}
+
+// The udit-001 geojson stores the state name under one of these keys
+// depending on the feature — check them in order so we reliably pick it
+// up regardless of which property set a given feature uses.
+function getStateName(properties: Record<string, any> | undefined): string | undefined {
+  if (!properties) return undefined;
+  return (
+    properties.st_nm ??
+    properties.STATE ??
+    properties.NAME_1 ??
+    properties.name ??
+    undefined
+  );
+}
+
 export default function IndiaMap({
   onSelectDestination,
   selected,
@@ -55,17 +91,21 @@ export default function IndiaMap({
         >
           <Geographies geography={INDIA_GEO_URL}>
             {({ geographies }: { geographies: any[] }) =>
-              geographies.map((geo: any) => (
-                <Geography
-                  key={geo.rsmKey}
-                  geography={geo}
-                  style={{
-                    default: { fill: "#e7e2d6", stroke: "#fffaf3", strokeWidth: 0.75, outline: "none" },
-                    hover: { fill: "#e7e2d6", stroke: "#fffaf3", strokeWidth: 0.75, outline: "none" },
-                    pressed: { fill: "#e7e2d6", outline: "none" },
-                  }}
-                />
-              ))
+              geographies.map((geo: any) => {
+                const stateName = getStateName(geo.properties);
+                const fill = colorForState(stateName);
+                return (
+                  <Geography
+                    key={geo.rsmKey}
+                    geography={geo}
+                    style={{
+                      default: { fill, stroke: "#fffaf3", strokeWidth: 0.75, outline: "none" },
+                      hover: { fill, stroke: "#fffaf3", strokeWidth: 0.75, outline: "none", opacity: 0.85 },
+                      pressed: { fill, outline: "none" },
+                    }}
+                  />
+                );
+              })
             }
           </Geographies>
 
