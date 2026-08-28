@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ComposableMap, Geographies, Geography, Marker } from "react-simple-maps";
+import { ComposableMap, Geographies, Geography, Marker, Line } from "react-simple-maps";
 import { Fraunces, Manrope, JetBrains_Mono } from "next/font/google";
 import { majorCities } from "@/data/majorCities";
 
@@ -18,11 +18,18 @@ const INDIA_GEO_URL =
 export default function IndiaMap({
   onSelectDestination,
   selected,
+  origin,
 }: {
   onSelectDestination?: (cityName: string) => void;
   selected?: string;
+  /** Name of the origin city, if one has been picked (e.g. via the trip form). */
+  origin?: string;
 }) {
   const [hovered, setHovered] = useState<string | null>(null);
+
+  const originCity = origin ? majorCities.find((c) => c.name === origin) : undefined;
+  const destinationCity = selected ? majorCities.find((c) => c.name === selected) : undefined;
+  const showRoute = !!(originCity && destinationCity && originCity.name !== destinationCity.name);
 
   return (
     <section className="px-6 md:px-12 py-20 max-w-5xl mx-auto">
@@ -62,9 +69,27 @@ export default function IndiaMap({
             }
           </Geographies>
 
+          {/* Connecting route line between origin and destination */}
+          {showRoute && (
+            <Line
+              from={[originCity!.lng, originCity!.lat]}
+              to={[destinationCity!.lng, destinationCity!.lat]}
+              stroke="#ff7a21"
+              strokeWidth={1.6}
+              strokeLinecap="round"
+              strokeDasharray="5 4"
+              className="route-line"
+            />
+          )}
+
           {majorCities.map((city) => {
-            const isSelected = selected === city.name;
+            const isDestination = selected === city.name;
+            const isOrigin = origin === city.name && !isDestination;
             const isHovered = hovered === city.name;
+            const isActive = isDestination || isOrigin;
+
+            const dotColor = isDestination ? "#ff7a21" : isOrigin ? "#1c2a6e" : "#3452e5";
+
             return (
               <Marker
                 key={city.code}
@@ -74,14 +99,14 @@ export default function IndiaMap({
                 onMouseLeave={() => setHovered(null)}
                 style={{ default: { cursor: "pointer" }, hover: { cursor: "pointer" }, pressed: { cursor: "pointer" } }}
               >
-                {isSelected && <circle r={5} fill="#ff7a21" opacity={0.45} className="map-pulse" />}
+                {isActive && <circle r={5} fill={dotColor} opacity={0.45} className="map-pulse" />}
                 <circle
-                  r={isSelected ? 5 : 3}
-                  fill={isSelected ? "#ff7a21" : "#3452e5"}
+                  r={isActive ? 5 : 3}
+                  fill={dotColor}
                   stroke="#fffaf3"
                   strokeWidth={1.1}
                 />
-                {(isHovered || isSelected) && (
+                {(isHovered || isActive) && (
                   <text
                     textAnchor="middle"
                     y={-10}
@@ -89,13 +114,13 @@ export default function IndiaMap({
                     style={{
                       fontSize: 9,
                       fontWeight: 700,
-                      fill: isSelected ? "#ff7a21" : "#12142b",
+                      fill: isDestination ? "#ff7a21" : isOrigin ? "#1c2a6e" : "#12142b",
                       paintOrder: "stroke",
                       stroke: "#fffaf3",
                       strokeWidth: 3,
                     }}
                   >
-                    {city.name}
+                    {isOrigin ? `From: ${city.name}` : isDestination ? `To: ${city.name}` : city.name}
                   </text>
                 )}
               </Marker>
@@ -103,6 +128,14 @@ export default function IndiaMap({
           })}
         </ComposableMap>
       </div>
+
+      {showRoute && (
+        <p className={`${manrope.className} mt-4 text-center text-sm text-black/55`}>
+          <span className="font-semibold text-[#1c2a6e]">{originCity!.name}</span>
+          {" → "}
+          <span className="font-semibold text-[#ff7a21]">{destinationCity!.name}</span>
+        </p>
+      )}
 
       <style jsx>{`
         .map-pulse {
@@ -113,6 +146,12 @@ export default function IndiaMap({
         @keyframes mapPulse {
           0% { transform: scale(1); opacity: 0.5; }
           100% { transform: scale(3.4); opacity: 0; }
+        }
+        .route-line {
+          animation: dashFlow 1.2s linear infinite;
+        }
+        @keyframes dashFlow {
+          to { stroke-dashoffset: -18; }
         }
       `}</style>
     </section>

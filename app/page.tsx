@@ -26,6 +26,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mapSelectedCity, setMapSelectedCity] = useState<string | undefined>();
+  const [mapSelectedOrigin, setMapSelectedOrigin] = useState<string | undefined>();
 
   const handleGenerate = async (values: PlannerFormValues) => {
     setLoading(true);
@@ -44,6 +45,9 @@ export default function HomePage() {
 
       const data: ItineraryData = await res.json();
       setItinerary(data);
+      // Keep the map's route line in sync with what was actually submitted.
+      setMapSelectedOrigin(values.origin);
+      setMapSelectedCity(values.destination);
     } catch (err) {
       console.error("Failed to generate itinerary", err);
       setError("Something went wrong generating your itinerary. Please try again.");
@@ -159,7 +163,11 @@ export default function HomePage() {
       <Hero />
       <HowItWorks />
 
-      <IndiaMap onSelectDestination={setMapSelectedCity} selected={mapSelectedCity} />
+      <IndiaMap
+        onSelectDestination={setMapSelectedCity}
+        selected={mapSelectedCity}
+        origin={mapSelectedOrigin}
+      />
 
       <div
         id="plan"

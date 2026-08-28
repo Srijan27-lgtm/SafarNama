@@ -1,9 +1,9 @@
-// app/api/plan/route.ts
 import { NextResponse } from "next/server";
 import { cities } from "@/data/cities";
 import type { ItineraryData, ItineraryDay, TravelOption } from "@/types/itinerary";
 
 interface PlanRequestBody {
+  origin: string;
   destination: string;
   duration: string;
   style: string;
@@ -15,14 +15,21 @@ function parseDurationToDays(duration: string): number {
   return match ? parseInt(match[0], 10) : 3;
 }
 
-function buildPrompt(destination: string, state: string, daysCount: number, style: string, budget: number) {
-  return `You are a travel planner for trips within India. Create a ${daysCount}-day itinerary for ${destination}, ${state}, for a traveler with style "${style}" and a total budget of ₹${budget}.
+function buildPrompt(
+  origin: string,
+  destination: string,
+  state: string,
+  daysCount: number,
+  style: string,
+  budget: number
+) {
+  return `You are a travel planner for trips within India. Create a ${daysCount}-day itinerary for a trip FROM ${origin} TO ${destination}, ${state}, for a traveler with style "${style}" and a total budget of ₹${budget}.
 
 Respond with ONLY valid JSON, no markdown fences, no preamble, in exactly this shape:
 {
   "estCost": <number, realistic total cost in INR for this trip including travel, should be at or under ${budget}>,
   "travelOptions": [
-    { "mode": "<Flight|Train|Bus|Self-drive>", "from": "<nearest major hub city>", "duration": "<e.g. 1h 15m or 14h>", "estCost": <number, realistic one-way cost per person in INR>, "notes": "<short practical tip, optional>" }
+    { "mode": "<Flight|Train|Bus|Self-drive>", "from": "${origin}", "duration": "<e.g. 1h 15m or 14h>", "estCost": <number, realistic one-way cost per person in INR>, "notes": "<short practical tip, optional>" }
   ],
   "localTransportEstCost": <number, realistic estimated cost in INR for local transport (auto/cab/bus) for the full trip duration>,
   "days": [
@@ -36,10 +43,13 @@ Requirements:
 - Match the pacing and cost level to the "${style}" travel style.
 
 For travelOptions:
-- Provide EXACTLY 2-3 options, covering DIFFERENT modes where realistically available (e.g. one flight option AND one train option, not two of the same mode).
-- For each mode, pick whichever nearby major city is the ACTUAL closest and most commonly used transport hub for ${destination} — do not default to any one city out of habit. Consider all reasonable major hubs (e.g. nearest airport city for flights, nearest railway junction for trains) and choose accurately for this specific destination.
-- Do NOT name a specific train, flight number, or airline. Describe the mode and route generally (e.g. "Train" from "Ranchi", not a named express train) — give a realistic fare RANGE reflected as a single representative number, and typical journey duration for that mode/route.
-- If a mode is impractical for this route (e.g. no direct flight access), omit it rather than inventing one.
+- The traveler is starting from ${origin} specifically — every option's "from" field must be "${origin}", not any other city. Do not substitute a different origin city.
+- Provide EXACTLY 2-3 options, covering DIFFERENT modes realistically available directly between ${origin} and ${destination} (e.g. one flight option AND one train option, not two of the same mode).
+- ALWAYS prefer the most DIRECT route from ${origin} to ${destination} itself as the primary option for each mode — a direct flight or train straight into ${destination} (or its actual nearest airport/station) beats a route that requires transferring through another city with a long separate cab/transfer onward. Only include a connecting/multi-leg route as a fallback, and only if a direct route genuinely doesn't exist between ${origin} and ${destination} — never present a disjointed multi-leg option as the first or default choice when a direct one is available.
+- If there is no practical direct mode between ${origin} and ${destination} for a given mode (e.g. no direct flight route exists), it's fine to describe the realistic connecting route actually used by travelers (e.g. "Flight" from "${origin}" with a layover) — but be explicit and honest about it in "notes" rather than silently inventing a clean direct option that doesn't exist.
+- Do NOT name a specific train, flight number, airline, or seating/class tier (e.g. do not say "AC First Class", "business class", "sleeper class"). Describe the mode and route generally — give a realistic AVERAGE fare across typical classes/fare tiers for that mode, appropriate to the "${style}" travel style, reflected as a single representative number, plus typical journey duration for that mode/route.
+- Do not invent extra private transfer legs as part of getting TO the destination — that belongs in local transport, not travelOptions, unless it's genuinely the only way to cover the last stretch.
+- If a mode is impractical for this route, omit it rather than inventing one.
 
 - estCost is the TOTAL trip cost including a round-trip travel estimate and local transport — must be a realistic whole number in INR, at or below ${budget}.
 - Output raw JSON only.`;
@@ -101,11 +111,11 @@ async function callGemini(
 export async function POST(req: Request) {
   try {
     const body: PlanRequestBody = await req.json();
-    const { destination, duration, style, budget } = body;
+    const { origin, destination, duration, style, budget } = body;
 
-    if (!destination || !duration || !style || !budget) {
+    if (!origin || !destination || !duration || !style || !budget) {
       return NextResponse.json(
-        { error: "Missing required fields: destination, duration, style, budget" },
+        { error: "Missing required fields: origin, destination, duration, style, budget" },
         { status: 400 }
       );
     }
@@ -116,7 +126,7 @@ export async function POST(req: Request) {
     const daysCount = parseDurationToDays(duration);
     const nightsCount = Math.max(daysCount - 1, 1);
 
-    const prompt = buildPrompt(destination, state, daysCount, style, budget);
+    const prompt = buildPrompt(origin, destination, state, daysCount, style, budget);
     const { estCost, travelOptions, localTransportEstCost, days } = await callGemini(prompt);
 
     const safeDays: ItineraryDay[] = Array.isArray(days) && days.length > 0
@@ -137,7 +147,7 @@ export async function POST(req: Request) {
           .slice(0, 3)
           .map((t: any) => ({
             mode: t.mode,
-            from: t.from ?? "",
+            from: t.from ?? origin,
             duration: t.duration ?? "",
             estCost: Math.max(0, Math.round(t.estCost)),
             notes: typeof t.notes === "string" ? t.notes : undefined,
@@ -167,7 +177,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json(result);
   } catch (err) {
-    console.error("Error in /api/plan:", err);
+    console.error("Error in /api/itinerary:", err);
     return NextResponse.json(
       {
         error: "Failed to generate itinerary",

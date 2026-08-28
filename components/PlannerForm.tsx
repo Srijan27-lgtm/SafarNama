@@ -29,7 +29,7 @@ export default function PlannerForm({
   const [budget, setBudget] = useState(15000);
 
   const min = 5000;
-  const max = 40000;
+  const max = 500000;
   const fillPct = ((budget - min) / (max - min)) * 100;
 
   const currency = (n: number) => `₹${n.toLocaleString("en-IN")}`;

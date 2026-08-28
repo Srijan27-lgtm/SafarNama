@@ -9,14 +9,15 @@ const manrope = Manrope({ subsets: ["latin"], weight: ["400", "500", "600", "700
 const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["500", "700"] });
 
 export interface PlannerFormValues {
+  origin: string;
   destination: string;
   duration: string;
   style: string;
   budget: number;
 }
 
-const durations = ["3 Days", "5 Days", "7 Days", "10 Days"];
-const styles = ["Backpacker / Solo", "Comfort / Couple", "Family / Group"];
+const durations = ["3 Days", "5 Days", "7 Days", "10 Days", "14 Days"];
+const styles = ["Backpacker / Solo", "Comfort / Couple", "Family / Group", "Luxury"];
 
 export default function TripConfig({
   onGenerate,
@@ -27,8 +28,9 @@ export default function TripConfig({
   selectedDestination?: string;
   onDestinationChange?: (cityName: string) => void;
 }) {
+  const [origin, setOrigin] = useState(cities[0]?.name ?? "");
   const [destination, setDestination] = useState(
-    selectedDestination ?? cities[0]?.name ?? ""
+    selectedDestination ?? cities[1]?.name ?? cities[0]?.name ?? ""
   );
   const [duration, setDuration] = useState(durations[0]);
   const [style, setStyle] = useState(styles[0]);
@@ -42,7 +44,7 @@ export default function TripConfig({
   }, [selectedDestination]);
 
   const min = 5000;
-  const max = 40000;
+  const max = 500000;
   const fillPct = ((budget - min) / (max - min)) * 100;
 
   const currency = (n: number) => `₹${n.toLocaleString("en-IN")}`;
@@ -54,7 +56,7 @@ export default function TripConfig({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onGenerate?.({ destination, duration, style, budget });
+    onGenerate?.({ origin, destination, duration, style, budget });
   };
 
   return (
@@ -76,6 +78,24 @@ export default function TripConfig({
       <p className="mt-1.5 mb-7 text-sm text-black/55">
         Works for any city in India — just pick one below
       </p>
+
+      <div className="mb-6">
+        <label htmlFor="origin" className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#1c2a6e]">
+          Origin City (From)
+        </label>
+        <select
+          id="origin"
+          value={origin}
+          onChange={(e) => setOrigin(e.target.value)}
+          className="w-full appearance-none rounded-[10px] border-[1.5px] border-black/10 bg-[#fffaf3] px-4 py-3 text-[15px] text-[#12142b] focus:border-[#3452e5] focus:bg-white focus:outline-none"
+        >
+          {cities.map((city) => (
+            <option key={city.code} value={city.name}>
+              {city.name}, {city.state}
+            </option>
+          ))}
+        </select>
+      </div>
 
       <div className="mb-6">
         <label htmlFor="destination" className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#1c2a6e]">
