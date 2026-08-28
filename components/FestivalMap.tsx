@@ -7,7 +7,11 @@ import { festivals } from "@/data/festivals";
 
 const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["600", "700"] });
 
-const WORLD_ATLAS_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
+// Up-to-date India GeoJSON (post-2019 reorganisation), with J&K and Ladakh
+// as separate union territories. Source: udit-001/india-maps-data, pinned
+// to a specific commit so the file won't change unexpectedly.
+const INDIA_GEO_URL =
+  "https://cdn.jsdelivr.net/gh/udit-001/india-maps-data@2884453/geojson/india.geojson";
 
 export default function FestivalMap({
   onSelectFestival,
@@ -22,26 +26,24 @@ export default function FestivalMap({
     <div className="rounded-[20px] border border-black/10 bg-white p-4 shadow-[0_20px_50px_-25px_rgba(18,20,43,0.18)]">
       <ComposableMap
         projection="geoMercator"
-        projectionConfig={{ center: [82.5, 22.5], scale: 1100 }}
+        projectionConfig={{ center: [82.5, 22.5], scale: 900 }}
         width={480}
         height={540}
         style={{ width: "100%", height: "auto" }}
       >
-        <Geographies geography={WORLD_ATLAS_URL}>
+        <Geographies geography={INDIA_GEO_URL}>
           {({ geographies }: { geographies: any[] }) =>
-            geographies
-              .filter((geo: any) => geo.properties.name === "India")
-              .map((geo: any) => (
-                <Geography
-                  key={geo.rsmKey}
-                  geography={geo}
-                  style={{
-                    default: { fill: "#e7e2d6", stroke: "#fffaf3", strokeWidth: 0.75, outline: "none" },
-                    hover: { fill: "#e7e2d6", stroke: "#fffaf3", strokeWidth: 0.75, outline: "none" },
-                    pressed: { fill: "#e7e2d6", outline: "none" },
-                  }}
-                />
-              ))
+            geographies.map((geo: any) => (
+              <Geography
+                key={geo.rsmKey}
+                geography={geo}
+                style={{
+                  default: { fill: "#e7e2d6", stroke: "#fffaf3", strokeWidth: 0.75, outline: "none" },
+                  hover: { fill: "#e7e2d6", stroke: "#fffaf3", strokeWidth: 0.75, outline: "none" },
+                  pressed: { fill: "#e7e2d6", outline: "none" },
+                }}
+              />
+            ))
           }
         </Geographies>
 
