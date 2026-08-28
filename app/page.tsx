@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import Hero from "@/components/Hero";
 import HowItWorks from "@/components/HowItWorks";
 import WhyUs from "@/components/WhyUs";
@@ -8,16 +9,29 @@ import TripConfig, { type PlannerFormValues } from "@/components/TripConfig";
 import ItineraryCard from "@/components/ItineraryCard";
 import type { ItineraryData } from "@/types/itinerary";
 
+// react-simple-maps computes projections with floating-point math that
+// can differ slightly between server and client rendering, causing
+// hydration mismatches. Loading it client-only avoids that entirely.
+const IndiaMap = dynamic(() => import("@/components/IndiaMap"), {
+  ssr: false,
+  loading: () => (
+    <div className="max-w-5xl mx-auto my-20 flex h-[400px] items-center justify-center rounded-[20px] border border-dashed border-black/15 text-black/40 text-sm">
+      Loading map…
+    </div>
+  ),
+});
+
 export default function HomePage() {
   const [itinerary, setItinerary] = useState<ItineraryData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mapSelectedCity, setMapSelectedCity] = useState<string | undefined>();
 
   const handleGenerate = async (values: PlannerFormValues) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/plan", {
+      const res = await fetch("/api/itinerary", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(values),
@@ -42,11 +56,17 @@ export default function HomePage() {
       <Hero />
       <HowItWorks />
 
+      <IndiaMap onSelectDestination={setMapSelectedCity} selected={mapSelectedCity} />
+
       <div
         id="plan"
         className="grid grid-cols-1 md:grid-cols-2 gap-8 p-8 max-w-5xl mx-auto items-start"
       >
-        <TripConfig onGenerate={handleGenerate} />
+        <TripConfig
+          onGenerate={handleGenerate}
+          selectedDestination={mapSelectedCity}
+          onDestinationChange={setMapSelectedCity}
+        />
 
         {loading ? (
           <div className="max-w-lg mx-auto mt-10 flex h-[420px] items-center justify-center rounded-[20px] border border-dashed border-black/15 text-black/40">

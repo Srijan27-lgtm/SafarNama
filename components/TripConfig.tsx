@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Fraunces, Manrope, JetBrains_Mono } from "next/font/google";
 import { cities } from "@/data/cities";
 
@@ -20,19 +20,37 @@ const styles = ["Backpacker / Solo", "Comfort / Couple", "Family / Group"];
 
 export default function TripConfig({
   onGenerate,
+  selectedDestination,
+  onDestinationChange,
 }: {
   onGenerate?: (values: PlannerFormValues) => void;
+  selectedDestination?: string;
+  onDestinationChange?: (cityName: string) => void;
 }) {
-  const [destination, setDestination] = useState(cities[0]?.name ?? "");
+  const [destination, setDestination] = useState(
+    selectedDestination ?? cities[0]?.name ?? ""
+  );
   const [duration, setDuration] = useState(durations[0]);
   const [style, setStyle] = useState(styles[0]);
   const [budget, setBudget] = useState(15000);
+
+  // Keep the dropdown in sync when the map selection changes externally.
+  useEffect(() => {
+    if (selectedDestination && selectedDestination !== destination) {
+      setDestination(selectedDestination);
+    }
+  }, [selectedDestination]);
 
   const min = 5000;
   const max = 40000;
   const fillPct = ((budget - min) / (max - min)) * 100;
 
   const currency = (n: number) => `₹${n.toLocaleString("en-IN")}`;
+
+  const handleDestinationChange = (value: string) => {
+    setDestination(value);
+    onDestinationChange?.(value);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,7 +84,7 @@ export default function TripConfig({
         <select
           id="destination"
           value={destination}
-          onChange={(e) => setDestination(e.target.value)}
+          onChange={(e) => handleDestinationChange(e.target.value)}
           className="w-full appearance-none rounded-[10px] border-[1.5px] border-black/10 bg-[#fffaf3] px-4 py-3 text-[15px] text-[#12142b] focus:border-[#3452e5] focus:bg-white focus:outline-none"
         >
           {cities.map((city) => (
