@@ -14,6 +14,11 @@ const fallback: ItineraryData = {
   estCost: 14650,
   daysCount: 3,
   nightsCount: 2,
+  travelOptions: [
+    { mode: "Flight", from: "Delhi", duration: "1h 5m", estCost: 3200, notes: "Book 2-3 weeks ahead for best fares" },
+    { mode: "Train", from: "Delhi", duration: "4h 30m", estCost: 800 },
+  ],
+  localTransportEstCost: 1200,
   days: [
     { day: 1, title: "Forts & Royal Palaces", detail: "Amber Fort, City Palace, Jantar Mantar" },
     { day: 2, title: "Walled City & Bazaars", detail: "Hawa Mahal, Johari Bazaar, street food trail" },
@@ -23,6 +28,14 @@ const fallback: ItineraryData = {
 
 const currency = (n: number) =>
   `₹${n.toLocaleString("en-IN")}`;
+
+const modeIcon = (mode: string) => {
+  const m = mode.toLowerCase();
+  if (m.includes("flight")) return "✈";
+  if (m.includes("train")) return "🚆";
+  if (m.includes("bus")) return "🚌";
+  return "🚗";
+};
 
 export default function ItineraryCard({ data = fallback }: { data?: ItineraryData }) {
   const surplus = data.targetBudget - data.estCost;
@@ -67,6 +80,58 @@ export default function ItineraryCard({ data = fallback }: { data?: ItineraryDat
           />
         </div>
       </div>
+
+      {/* perforation divider */}
+      <div className="relative mt-6 mx-9">
+        <div className="border-t-2 border-dashed border-white/25" />
+        <div className="absolute -top-[11px] -left-[46px] h-[22px] w-[22px] rounded-full bg-[#fffaf3]" />
+        <div className="absolute -top-[11px] -right-[46px] h-[22px] w-[22px] rounded-full bg-[#fffaf3]" />
+      </div>
+
+      {/* how to reach */}
+      {data.travelOptions && data.travelOptions.length > 0 && (
+        <div className="relative z-10 px-9 mt-6">
+          <div className={`${mono.className} text-[10.5px] uppercase tracking-widest text-white/55 mb-3`}>
+            How to Reach
+          </div>
+          <div className="flex flex-col gap-2.5">
+            {data.travelOptions.map((t, i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.04] px-3.5 py-2.5"
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="text-base leading-none">{modeIcon(t.mode)}</span>
+                  <div>
+                    <div className="text-[13.5px] font-semibold text-white">
+                      {t.mode} from {t.from}
+                    </div>
+                    {(t.duration || t.notes) && (
+                      <div className="text-[11.5px] text-white/50">
+                        {t.duration}
+                        {t.duration && t.notes ? " · " : ""}
+                        {t.notes}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className={`${mono.className} text-[13px] font-bold text-[#ffb238] shrink-0 pl-3`}>
+                  {currency(t.estCost)}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {typeof data.localTransportEstCost === "number" && (
+            <div className="flex items-center justify-between mt-3 px-1">
+              <span className="text-[12.5px] text-white/50">Local transport (full trip, est.)</span>
+              <span className={`${mono.className} text-[12.5px] font-semibold text-white/70`}>
+                {currency(data.localTransportEstCost)}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* perforation divider */}
       <div className="relative mt-6 mx-9">

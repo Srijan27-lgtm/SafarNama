@@ -38,7 +38,8 @@ export default function HomePage() {
       });
 
       if (!res.ok) {
-        throw new Error(`Request failed with status ${res.status}`);
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.detail ?? `Request failed with status ${res.status}`);
       }
 
       const data: ItineraryData = await res.json();
